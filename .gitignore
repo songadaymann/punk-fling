@@ -1,0 +1,18 @@
+# OS files
+.DS_Store
+
+# Claude Code
+.claude/
+
+# Human materials
+human-materials-ignore/
+
+# Symlinks (won't work on other machines)
+agents.md
+GAME_INTEGRATION.md
+games.json
+
+# Large unused assets (this game uses traits/ not individual punks)
+assets/punks/
+assets/punks-hitboxes.json
+assets/punks-metadata.json

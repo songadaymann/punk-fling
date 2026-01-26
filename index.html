@@ -1,0 +1,803 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Fling Punk</title>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: url('assets/punks.png') center center no-repeat;
+            background-size: cover;
+            image-rendering: pixelated;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            font-family: 'Press Start 2P', monospace;
+            overflow: hidden;
+            touch-action: none;
+        }
+
+        #game-container {
+            position: relative;
+            width: 400px;
+            height: 700px;
+            max-width: 100vw;
+            max-height: 100vh;
+            background: #E56399;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        }
+
+        #game-canvas {
+            position: relative;
+            z-index: 1;
+            width: 100%;
+            height: 100%;
+            image-rendering: pixelated;
+            image-rendering: crisp-edges;
+            cursor: grab;
+        }
+
+        #game-canvas.grabbing {
+            cursor: grabbing;
+        }
+
+        #ui-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            padding: 10px;
+            pointer-events: none;
+        }
+
+        #title {
+            color: #E56399;
+            font-size: 18px;
+            text-align: center;
+            text-shadow: 2px 2px 0 #000;
+            margin-bottom: 5px;
+        }
+
+        #instructions {
+            color: #fff;
+            font-size: 8px;
+            text-align: center;
+            opacity: 0.8;
+        }
+
+        #height-display {
+            position: absolute;
+            top: 50px;
+            right: 10px;
+            color: #E56399;
+            font-size: 14px;
+            text-shadow: 2px 2px 0 #000;
+            pointer-events: none;
+        }
+
+        #best-display {
+            position: absolute;
+            top: 80px;
+            right: 10px;
+            color: #fff;
+            font-size: 10px;
+            text-shadow: 1px 1px 0 #000;
+            pointer-events: none;
+        }
+
+        .modal {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.9);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+        }
+
+        .modal.hidden {
+            display: none;
+        }
+
+        .modal h2 {
+            color: #E56399;
+            font-size: 24px;
+            margin-bottom: 20px;
+            text-shadow: 2px 2px 0 #000;
+        }
+
+        .modal p {
+            color: #fff;
+            font-size: 10px;
+            margin-bottom: 10px;
+            text-align: center;
+            max-width: 300px;
+            line-height: 1.8;
+        }
+
+        .modal .score {
+            color: #4ecdc4;
+            font-size: 32px;
+            margin: 20px 0;
+        }
+
+        .modal button {
+            background: #E56399;
+            color: #fff;
+            border: none;
+            padding: 15px 30px;
+            font-family: 'Press Start 2P', monospace;
+            font-size: 12px;
+            cursor: pointer;
+            margin-top: 20px;
+            transition: transform 0.1s;
+        }
+
+        .modal button:hover {
+            transform: scale(1.05);
+        }
+
+        .modal button:active {
+            transform: scale(0.95);
+        }
+
+        #punk-preview {
+            width: 96px;
+            height: 96px;
+            margin: 20px 0;
+            image-rendering: pixelated;
+            image-rendering: crisp-edges;
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <canvas id="game-canvas"></canvas>
+
+        <div id="ui-overlay">
+            <div id="title">FLING PUNK</div>
+            <div id="instructions">CLICK & DRAG TO SWING - RELEASE TO FLING!</div>
+        </div>
+
+        <div id="height-display">0m</div>
+        <div id="best-display">BEST: 0m</div>
+
+        <div id="start-modal" class="modal">
+            <h2>FLING PUNK</h2>
+            <canvas id="punk-preview"></canvas>
+            <p>SWING THE PUNK ON THE STRING AND FLING IT AS HIGH AS YOU CAN!</p>
+            <p>CLICK AND DRAG TO SWING<br>RELEASE TO LAUNCH!</p>
+            <button id="start-btn">START</button>
+        </div>
+
+        <div id="gameover-modal" class="modal hidden">
+            <h2>NICE FLING!</h2>
+            <div class="score" id="final-score">0m</div>
+            <p id="new-record" style="color: #4ecdc4; display: none;">NEW RECORD!</p>
+            <button id="restart-btn">FLING AGAIN</button>
+        </div>
+    </div>
+
+    <script>
+        // Matter.js modules
+        const { Engine, Render, Runner, Bodies, Body, Composite, Constraint, Events, Mouse, Vector } = Matter;
+
+        // Game constants
+        const CANVAS_WIDTH = 400;
+        const CANVAS_HEIGHT = 700;
+        const PUNK_SIZE = 64;
+        const STRING_LENGTH = 150;
+        const GRAVITY = 0.8;
+        const SWING_FORCE = 0.002;
+        const PIXELS_PER_METER = 40;
+        const ANCHOR_Y = 250;
+
+        // Game state
+        let engine, runner;
+        let punk, anchor, string;
+        let punkCanvas, punkCtx;
+        let isHolding = false;
+        let gameStarted = false;
+        let gameOver = false;
+        let released = false;
+        let cameraY = 0;
+        let maxHeight = 0;
+        let bestHeight = parseInt(localStorage.getItem('flingPunkBest') || '0');
+        let currentPunkData = null;
+        let mousePos = { x: CANVAS_WIDTH / 2, y: CANVAS_HEIGHT / 2 };
+        let trailPoints = [];
+
+        // Cloud system
+        let cloudImages = [];
+        let clouds = []; // Array of { x, y, imageIndex, scale }
+
+        // Trait manifest
+        let manifest = null;
+
+        // DOM elements
+        const canvas = document.getElementById('game-canvas');
+        const ctx = canvas.getContext('2d');
+        const startModal = document.getElementById('start-modal');
+        const gameoverModal = document.getElementById('gameover-modal');
+        const heightDisplay = document.getElementById('height-display');
+        const bestDisplay = document.getElementById('best-display');
+        const finalScore = document.getElementById('final-score');
+        const newRecord = document.getElementById('new-record');
+        const punkPreview = document.getElementById('punk-preview');
+
+        // Initialize canvases
+        canvas.width = CANVAS_WIDTH;
+        canvas.height = CANVAS_HEIGHT;
+        punkPreview.width = 96;
+        punkPreview.height = 96;
+
+        // Update best display
+        bestDisplay.textContent = `BEST: ${bestHeight}m`;
+
+        // Load cloud images
+        async function loadClouds() {
+            const cloudSources = ['assets/cloud.png', 'assets/cloud1.png'];
+            for (const src of cloudSources) {
+                const img = new Image();
+                img.src = src;
+                await new Promise(resolve => {
+                    img.onload = resolve;
+                    img.onerror = resolve;
+                });
+                cloudImages.push(img);
+            }
+        }
+
+        // Generate cloud positions throughout the sky
+        function generateClouds() {
+            clouds = [];
+            const groundY = ANCHOR_Y + STRING_LENGTH + PUNK_SIZE + 50;
+            const maxWorldHeight = 80000; // Enough for 2000m
+
+            // Generate clouds every ~100 pixels (2.5m) with some randomness
+            for (let y = groundY - 200; y > -maxWorldHeight; y -= 80 + Math.random() * 120) {
+                // 1-2 clouds per height level
+                const numCloudsAtLevel = Math.random() < 0.4 ? 2 : 1;
+
+                for (let i = 0; i < numCloudsAtLevel; i++) {
+                    clouds.push({
+                        x: 30 + Math.random() * (CANVAS_WIDTH - 60),
+                        y: y + (Math.random() - 0.5) * 40,
+                        imageIndex: Math.floor(Math.random() * cloudImages.length),
+                        scale: 0.8 + Math.random() * 0.6 // Random size variation
+                    });
+                }
+            }
+        }
+
+        // Load manifest and initialize
+        async function init() {
+            try {
+                // Load clouds first
+                await loadClouds();
+                generateClouds();
+
+                const response = await fetch('assets/traits/manifest.json');
+                manifest = await response.json();
+                await generateRandomPunk();
+                drawPunkPreview();
+            } catch (e) {
+                console.error('Failed to load manifest:', e);
+                // Fallback: just use a colored circle
+                manifest = { base: ['male1'], male: [], female: [] };
+            }
+        }
+
+        // Generate a random punk
+        async function generateRandomPunk() {
+            const baseTypes = manifest.base;
+            const base = baseTypes[Math.floor(Math.random() * baseTypes.length)];
+
+            // Determine gender for traits
+            const isMale = base.startsWith('male') || base === 'alien' || base === 'ape' || base === 'zombie';
+            const traitList = isMale ? manifest.male : manifest.female;
+            const traitFolder = isMale ? 'm' : 'f';
+
+            // Pick 1-3 random traits
+            const numTraits = Math.floor(Math.random() * 3) + 1;
+            const shuffled = [...traitList].sort(() => Math.random() - 0.5);
+            const selectedTraits = shuffled.slice(0, numTraits);
+
+            currentPunkData = {
+                base,
+                traits: selectedTraits,
+                traitFolder,
+                images: {}
+            };
+
+            // Preload images
+            await loadPunkImages();
+        }
+
+        // Load punk images
+        async function loadPunkImages() {
+            const loadImage = (src) => {
+                return new Promise((resolve, reject) => {
+                    const img = new Image();
+                    img.onload = () => resolve(img);
+                    img.onerror = () => resolve(null); // Resolve with null on error
+                    img.src = src;
+                });
+            };
+
+            // Load base
+            currentPunkData.images.base = await loadImage(`assets/traits/base/${currentPunkData.base}.png`);
+
+            // Load traits
+            for (const trait of currentPunkData.traits) {
+                currentPunkData.images[trait] = await loadImage(`assets/traits/${currentPunkData.traitFolder}/${trait}.png`);
+            }
+        }
+
+        // Create offscreen punk canvas
+        function createPunkCanvas() {
+            punkCanvas = document.createElement('canvas');
+            punkCanvas.width = PUNK_SIZE;
+            punkCanvas.height = PUNK_SIZE;
+            punkCtx = punkCanvas.getContext('2d');
+            punkCtx.imageSmoothingEnabled = false;
+
+            // Draw base
+            if (currentPunkData.images.base) {
+                punkCtx.drawImage(currentPunkData.images.base, 0, 0, PUNK_SIZE, PUNK_SIZE);
+            } else {
+                // Fallback pink square
+                punkCtx.fillStyle = '#E56399';
+                punkCtx.fillRect(0, 0, PUNK_SIZE, PUNK_SIZE);
+            }
+
+            // Draw traits
+            for (const trait of currentPunkData.traits) {
+                const img = currentPunkData.images[trait];
+                if (img) {
+                    punkCtx.drawImage(img, 0, 0, PUNK_SIZE, PUNK_SIZE);
+                }
+            }
+        }
+
+        // Draw punk preview on start screen
+        function drawPunkPreview() {
+            const previewCtx = punkPreview.getContext('2d');
+            previewCtx.imageSmoothingEnabled = false;
+            previewCtx.clearRect(0, 0, 96, 96);
+
+            // Draw base
+            if (currentPunkData.images.base) {
+                previewCtx.drawImage(currentPunkData.images.base, 0, 0, 96, 96);
+            }
+
+            // Draw traits
+            for (const trait of currentPunkData.traits) {
+                const img = currentPunkData.images[trait];
+                if (img) {
+                    previewCtx.drawImage(img, 0, 0, 96, 96);
+                }
+            }
+        }
+
+        // Setup Matter.js physics
+        function setupPhysics() {
+            engine = Engine.create();
+            engine.gravity.y = GRAVITY;
+
+            // Create anchor point (static)
+            anchor = Bodies.circle(CANVAS_WIDTH / 2, ANCHOR_Y, 5, {
+                isStatic: true,
+                render: { visible: false }
+            });
+
+            // Create punk body - start at bottom of swing
+            punk = Bodies.circle(CANVAS_WIDTH / 2, ANCHOR_Y + STRING_LENGTH, PUNK_SIZE / 2, {
+                restitution: 0.5,
+                friction: 0.1,
+                frictionAir: 0.001,
+                density: 0.003,
+                label: 'punk'
+            });
+
+            // Create string constraint
+            string = Constraint.create({
+                bodyA: anchor,
+                bodyB: punk,
+                length: STRING_LENGTH,
+                stiffness: 0.9,
+                damping: 0.01
+            });
+
+            // Create walls to contain the punk (very tall to cover flight path)
+            const wallThickness = 50;
+            const wallHeight = 50000; // Tall enough for high flights
+
+            const leftWall = Bodies.rectangle(
+                -wallThickness / 2,
+                -wallHeight / 2,
+                wallThickness,
+                wallHeight,
+                { isStatic: true, restitution: 0.8, label: 'wall' }
+            );
+
+            const rightWall = Bodies.rectangle(
+                CANVAS_WIDTH + wallThickness / 2,
+                -wallHeight / 2,
+                wallThickness,
+                wallHeight,
+                { isStatic: true, restitution: 0.8, label: 'wall' }
+            );
+
+            Composite.add(engine.world, [anchor, punk, string, leftWall, rightWall]);
+        }
+
+        // Start the game
+        function startGame() {
+            startModal.classList.add('hidden');
+            gameStarted = true;
+            gameOver = false;
+            released = false;
+            isHolding = false;
+            maxHeight = 0;
+            trailPoints = [];
+
+            createPunkCanvas();
+            setupPhysics();
+
+            // Initialize camera to show the swing area
+            // Punk starts at ANCHOR_Y + STRING_LENGTH, we want that near bottom of screen
+            cameraY = ANCHOR_Y - CANVAS_HEIGHT / 3;
+
+            // Start physics loop
+            runner = Runner.create();
+            Runner.run(runner, engine);
+
+            // Start render loop
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Main game loop
+        function gameLoop() {
+            if (!gameStarted) return;
+
+            update();
+            render();
+
+            if (!gameOver) {
+                requestAnimationFrame(gameLoop);
+            }
+        }
+
+        // Update game logic
+        function update() {
+            if (gameOver) return;
+
+            const groundY = ANCHOR_Y + STRING_LENGTH + PUNK_SIZE;
+
+            // Apply swing force when holding
+            if (isHolding && !released) {
+                // Get mouse position in world coordinates (account for camera offset)
+                const worldMouseY = mousePos.y + cameraY;
+                const dx = mousePos.x - punk.position.x;
+                const dy = worldMouseY - punk.position.y;
+
+                Body.applyForce(punk, punk.position, {
+                    x: dx * SWING_FORCE,
+                    y: dy * SWING_FORCE
+                });
+            }
+
+            // Track height (always, even during swing for fun)
+            const height = Math.max(0, groundY - punk.position.y);
+            const heightMeters = Math.floor(height / PIXELS_PER_METER);
+            if (heightMeters > maxHeight) {
+                maxHeight = heightMeters;
+            }
+            heightDisplay.textContent = `${maxHeight}m`;
+
+            // After release, update trail and camera
+            if (released) {
+                // Add trail point
+                trailPoints.push({ x: punk.position.x, y: punk.position.y });
+                if (trailPoints.length > 50) {
+                    trailPoints.shift();
+                }
+
+                // Camera follows punk - keep punk centered on screen
+                // cameraY = world Y coordinate at TOP of screen
+                // We want punk at screen center (CANVAS_HEIGHT/2 from top)
+                // screenY = worldY - cameraY, so CANVAS_HEIGHT/2 = punk.y - cameraY
+                // cameraY = punk.y - CANVAS_HEIGHT/2
+                const targetCameraY = punk.position.y - CANVAS_HEIGHT / 2;
+                cameraY = targetCameraY;
+
+                // Check if punk has fallen back down past the ground
+                if (punk.velocity.y > 0 && punk.position.y > groundY + 200) {
+                    endGame();
+                }
+            }
+        }
+
+        // Render the game
+        function render() {
+            const groundY = ANCHOR_Y + STRING_LENGTH + PUNK_SIZE + 50;
+
+            // Clear canvas with transparent so background punk shows through
+            ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+            // Save context for camera transform
+            ctx.save();
+            // Camera offset: negative cameraY moves view up
+            ctx.translate(0, -cameraY);
+
+            // Draw height markers
+            drawHeightMarkers();
+
+            // Draw clouds
+            drawClouds();
+
+            // Draw string
+            if (!released) {
+                ctx.strokeStyle = '#fff';
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.moveTo(anchor.position.x, anchor.position.y);
+                ctx.lineTo(punk.position.x, punk.position.y);
+                ctx.stroke();
+
+                // Draw anchor
+                ctx.fillStyle = '#fff';
+                ctx.beginPath();
+                ctx.arc(anchor.position.x, anchor.position.y, 8, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            // Draw trail when flying
+            if (released && trailPoints.length > 1) {
+                ctx.strokeStyle = 'rgba(229, 99, 153, 0.5)';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(trailPoints[0].x, trailPoints[0].y);
+                for (let i = 1; i < trailPoints.length; i++) {
+                    ctx.lineTo(trailPoints[i].x, trailPoints[i].y);
+                }
+                ctx.stroke();
+            }
+
+            // Draw punk
+            ctx.save();
+            ctx.translate(punk.position.x, punk.position.y);
+            ctx.rotate(punk.angle);
+            ctx.drawImage(punkCanvas, -PUNK_SIZE / 2, -PUNK_SIZE / 2, PUNK_SIZE, PUNK_SIZE);
+            ctx.restore();
+
+            // Draw ground area (when visible)
+            const groundScreenY = groundY - cameraY;
+            if (groundScreenY < CANVAS_HEIGHT + 200) {
+                ctx.fillStyle = '#fff';
+                ctx.fillRect(0, groundY, CANVAS_WIDTH, 500);
+
+                // Ground line
+                ctx.strokeStyle = '#E56399';
+                ctx.lineWidth = 4;
+                ctx.beginPath();
+                ctx.moveTo(0, groundY);
+                ctx.lineTo(CANVAS_WIDTH, groundY);
+                ctx.stroke();
+
+                // "START" text on ground
+                ctx.fillStyle = '#E56399';
+                ctx.font = '12px "Press Start 2P"';
+                ctx.textAlign = 'center';
+                ctx.fillText('START', CANVAS_WIDTH / 2, groundY + 30);
+            }
+
+            ctx.restore();
+
+            // Draw grab indicator when holding (in screen space)
+            if (isHolding && !released) {
+                ctx.fillStyle = 'rgba(229, 99, 153, 0.3)';
+                ctx.beginPath();
+                ctx.arc(mousePos.x, mousePos.y, 30, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        // Draw height markers on left side
+        function drawHeightMarkers() {
+            const groundY = ANCHOR_Y + STRING_LENGTH + PUNK_SIZE + 50;
+
+            ctx.font = '10px "Press Start 2P"';
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+            ctx.textAlign = 'left';
+
+            // Draw markers (view window in world coordinates)
+            const viewTop = cameraY;
+            const viewBottom = cameraY + CANVAS_HEIGHT;
+
+            for (let m = 0; m <= 2000; m += 10) {
+                const y = groundY - (m * PIXELS_PER_METER);
+
+                // Only draw if in view
+                if (y > viewTop - 100 && y < viewBottom + 100) {
+                    // Line
+                    const isMajor = m % 100 === 0;
+                    const isMinor = m % 50 === 0;
+                    ctx.strokeStyle = isMajor ? 'rgba(229, 99, 153, 0.6)' : 'rgba(255, 255, 255, 0.15)';
+                    ctx.lineWidth = isMajor ? 2 : 1;
+                    ctx.beginPath();
+                    ctx.moveTo(0, y);
+                    ctx.lineTo(isMajor ? 60 : (isMinor ? 40 : 20), y);
+                    ctx.stroke();
+
+                    // Label (every 50m)
+                    if (isMinor && m > 0) {
+                        ctx.fillStyle = isMajor ? '#E56399' : 'rgba(255, 255, 255, 0.5)';
+                        ctx.fillText(`${m}m`, 5, y - 5);
+                    }
+                }
+            }
+        }
+
+        // Draw clouds in view
+        function drawClouds() {
+            const viewTop = cameraY - 100;
+            const viewBottom = cameraY + CANVAS_HEIGHT + 100;
+
+            ctx.imageSmoothingEnabled = false;
+
+            for (const cloud of clouds) {
+                // Only draw if in view
+                if (cloud.y > viewTop && cloud.y < viewBottom) {
+                    const img = cloudImages[cloud.imageIndex];
+                    if (img && img.complete) {
+                        const width = img.width * cloud.scale;
+                        const height = img.height * cloud.scale;
+                        ctx.drawImage(img, cloud.x - width / 2, cloud.y - height / 2, width, height);
+                    }
+                }
+            }
+        }
+
+        // End the game
+        function endGame() {
+            gameOver = true;
+            Runner.stop(runner);
+            Composite.clear(engine.world);
+
+            // Check for new record
+            if (maxHeight > bestHeight) {
+                bestHeight = maxHeight;
+                localStorage.setItem('flingPunkBest', bestHeight.toString());
+                bestDisplay.textContent = `BEST: ${bestHeight}m`;
+                newRecord.style.display = 'block';
+            } else {
+                newRecord.style.display = 'none';
+            }
+
+            finalScore.textContent = `${maxHeight}m`;
+            gameoverModal.classList.remove('hidden');
+        }
+
+        // Restart the game
+        async function restartGame() {
+            gameoverModal.classList.add('hidden');
+            await generateRandomPunk();
+            startGame();
+        }
+
+        // Mouse/Touch handlers
+        function getEventPos(e) {
+            const rect = canvas.getBoundingClientRect();
+            const scaleX = CANVAS_WIDTH / rect.width;
+            const scaleY = CANVAS_HEIGHT / rect.height;
+
+            if (e.touches && e.touches.length > 0) {
+                return {
+                    x: (e.touches[0].clientX - rect.left) * scaleX,
+                    y: (e.touches[0].clientY - rect.top) * scaleY
+                };
+            }
+            return {
+                x: (e.clientX - rect.left) * scaleX,
+                y: (e.clientY - rect.top) * scaleY
+            };
+        }
+
+        function onPointerDown(e) {
+            e.preventDefault();
+            if (!gameStarted || gameOver || released) return;
+
+            mousePos = getEventPos(e);
+            isHolding = true;
+            canvas.classList.add('grabbing');
+        }
+
+        function onPointerMove(e) {
+            e.preventDefault();
+            if (!gameStarted || gameOver) return;
+
+            mousePos = getEventPos(e);
+        }
+
+        function onPointerUp(e) {
+            e.preventDefault();
+            if (!gameStarted || gameOver || released) return;
+
+            if (isHolding) {
+                // Release the punk!
+                released = true;
+                isHolding = false;
+                canvas.classList.remove('grabbing');
+
+                // Remove string constraint
+                Composite.remove(engine.world, string);
+                Composite.remove(engine.world, anchor);
+
+                // Calculate release boost based on swing velocity
+                const currentVel = punk.velocity;
+                const speed = Math.sqrt(currentVel.x * currentVel.x + currentVel.y * currentVel.y);
+
+                // Keep horizontal momentum
+                let boostX = currentVel.x * 1.3;
+
+                // ALWAYS launch upward - use swing speed to determine power
+                // Minimum upward velocity plus bonus from swing speed
+                const minUpwardSpeed = 15;
+                const speedBonus = speed * 1.2;
+                let boostY = -(minUpwardSpeed + speedBonus); // Negative = upward
+
+                // Clamp to prevent insane speeds
+                const maxSpeed = 35;
+                const newSpeed = Math.sqrt(boostX * boostX + boostY * boostY);
+                if (newSpeed > maxSpeed) {
+                    const scale = maxSpeed / newSpeed;
+                    boostX *= scale;
+                    boostY *= scale;
+                }
+
+                Body.setVelocity(punk, { x: boostX, y: boostY });
+
+                // Add first trail point
+                trailPoints.push({ x: punk.position.x, y: punk.position.y });
+            }
+        }
+
+        // Event listeners
+        canvas.addEventListener('mousedown', onPointerDown);
+        canvas.addEventListener('mousemove', onPointerMove);
+        canvas.addEventListener('mouseup', onPointerUp);
+        canvas.addEventListener('mouseleave', onPointerUp);
+
+        canvas.addEventListener('touchstart', onPointerDown, { passive: false });
+        canvas.addEventListener('touchmove', onPointerMove, { passive: false });
+        canvas.addEventListener('touchend', onPointerUp, { passive: false });
+        canvas.addEventListener('touchcancel', onPointerUp, { passive: false });
+
+        document.getElementById('start-btn').addEventListener('click', startGame);
+        document.getElementById('restart-btn').addEventListener('click', restartGame);
+
+        // Prevent scrolling on mobile
+        document.body.addEventListener('touchmove', (e) => e.preventDefault(), { passive: false });
+
+        // Initialize
+        init();
+    </script>
+</body>
+</html>

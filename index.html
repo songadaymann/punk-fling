@@ -52,35 +52,11 @@
             cursor: grabbing;
         }
 
-        #ui-overlay {
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            padding: 10px;
-            pointer-events: none;
-        }
-
-        #title {
-            color: #E56399;
-            font-size: 18px;
-            text-align: center;
-            text-shadow: 2px 2px 0 #000;
-            margin-bottom: 5px;
-        }
-
-        #instructions {
-            color: #fff;
-            font-size: 8px;
-            text-align: center;
-            opacity: 0.8;
-        }
-
         #height-display {
             position: absolute;
-            top: 50px;
+            top: 10px;
             right: 10px;
-            color: #E56399;
+            color: #fff;
             font-size: 14px;
             text-shadow: 2px 2px 0 #000;
             pointer-events: none;
@@ -88,10 +64,23 @@
 
         #best-display {
             position: absolute;
-            top: 80px;
+            top: 35px;
             right: 10px;
             color: #fff;
             font-size: 10px;
+            text-shadow: 1px 1px 0 #000;
+            pointer-events: none;
+            opacity: 0.8;
+        }
+
+        #instructions {
+            position: absolute;
+            bottom: 75px;
+            left: 0;
+            right: 0;
+            color: #fff;
+            font-size: 8px;
+            text-align: center;
             text-shadow: 1px 1px 0 #000;
             pointer-events: none;
         }
@@ -163,39 +152,142 @@
             image-rendering: pixelated;
             image-rendering: crisp-edges;
         }
+
+        .wrapper {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .leaderboard {
+            width: 100%;
+            max-width: 400px;
+            background: white;
+            border: 4px solid #E56399;
+            border-top: none;
+            padding: 10px;
+        }
+
+        .leaderboard h3 {
+            font-size: 8px;
+            color: #E56399;
+            margin-bottom: 8px;
+            text-align: center;
+        }
+
+        .leaderboard-entries-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0 15px;
+        }
+
+        .leaderboard-entry {
+            display: flex;
+            justify-content: space-between;
+            font-size: 7px;
+            color: #E56399;
+            padding: 3px 0;
+            border-bottom: 1px solid rgba(229, 99, 153, 0.2);
+        }
+
+        .leaderboard-entry .rank {
+            width: 18px;
+        }
+
+        .leaderboard-entry .name {
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .leaderboard-entry .score {
+            width: 35px;
+            text-align: right;
+        }
+
+        .modal input {
+            width: 100%;
+            padding: 10px;
+            font-size: 10px;
+            font-family: 'Press Start 2P', monospace;
+            border: 2px solid #E56399;
+            margin-bottom: 10px;
+            text-align: center;
+            text-transform: uppercase;
+        }
+
+        .modal input::placeholder {
+            color: #ccc;
+        }
+
+        .modal .submit-row {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+        }
+
+        .modal button.secondary {
+            background: white;
+            color: #E56399;
+            border: 2px solid #E56399;
+        }
+
+        .modal button.secondary:hover {
+            background: #f8e8ef;
+        }
+
+        .modal .submitted-msg {
+            font-size: 8px;
+            color: #E56399;
+            margin-top: 10px;
+        }
     </style>
 </head>
 <body>
-    <div id="game-container">
-        <canvas id="game-canvas"></canvas>
+    <div class="wrapper">
+        <div id="game-container">
+            <canvas id="game-canvas"></canvas>
 
-        <div id="ui-overlay">
-            <div id="title">FLING PUNK</div>
-            <div id="instructions">CLICK & DRAG TO SWING - RELEASE TO FLING!</div>
+            <div id="height-display">0m</div>
+            <div id="best-display">BEST: 0m</div>
+            <div id="instructions">CLICK TO SWING - RELEASE TO FLING!</div>
+
+            <div id="start-modal" class="modal">
+                <h2>FLING PUNK</h2>
+                <canvas id="punk-preview"></canvas>
+                <p>SWING THE PUNK ON THE STRING AND FLING IT AS HIGH AS YOU CAN!</p>
+                <p>CLICK TO SWING<br>RELEASE TO LAUNCH!</p>
+                <button id="start-btn">START</button>
+            </div>
+
+            <div id="gameover-modal" class="modal hidden">
+                <h2>NICE FLING!</h2>
+                <div class="score" id="final-score">0m</div>
+                <p id="new-record" style="color: #4ecdc4; display: none;">NEW RECORD!</p>
+                <input type="text" id="player-name" placeholder="YOUR NAME" maxlength="12" />
+                <div class="submit-row">
+                    <button id="submit-score-btn">SUBMIT</button>
+                    <button id="restart-btn" class="secondary">SKIP</button>
+                </div>
+                <p class="submitted-msg" id="submitted-msg" style="display:none;">Score submitted!</p>
+            </div>
         </div>
-
-        <div id="height-display">0m</div>
-        <div id="best-display">BEST: 0m</div>
-
-        <div id="start-modal" class="modal">
-            <h2>FLING PUNK</h2>
-            <canvas id="punk-preview"></canvas>
-            <p>SWING THE PUNK ON THE STRING AND FLING IT AS HIGH AS YOU CAN!</p>
-            <p>CLICK AND DRAG TO SWING<br>RELEASE TO LAUNCH!</p>
-            <button id="start-btn">START</button>
-        </div>
-
-        <div id="gameover-modal" class="modal hidden">
-            <h2>NICE FLING!</h2>
-            <div class="score" id="final-score">0m</div>
-            <p id="new-record" style="color: #4ecdc4; display: none;">NEW RECORD!</p>
-            <button id="restart-btn">FLING AGAIN</button>
+        <div class="leaderboard" id="leaderboard">
+            <h3>TOP SCORES</h3>
+            <div class="leaderboard-entries-grid" id="leaderboard-entries">
+                <div class="leaderboard-entry"><span class="rank">-</span><span class="name">Loading...</span><span class="score">-</span></div>
+            </div>
         </div>
     </div>
 
     <script>
         // Matter.js modules
         const { Engine, Render, Runner, Bodies, Body, Composite, Constraint, Events, Mouse, Vector } = Matter;
+
+        // Leaderboard API
+        const API_BASE = 'https://mann.cool/api';
+        const GAME_ID = 'flingpunk';
 
         // Game constants
         const CANVAS_WIDTH = 400;
@@ -205,7 +297,7 @@
         const GRAVITY = 0.8;
         const SWING_FORCE = 0.002;
         const PIXELS_PER_METER = 40;
-        const ANCHOR_Y = 250;
+        const ANCHOR_Y = 372;
 
         // Game state
         let engine, runner;
@@ -225,6 +317,15 @@
         // Cloud system
         let cloudImages = [];
         let clouds = []; // Array of { x, y, imageIndex, scale }
+
+        // Power-up system
+        let powerUpImages = {}; // { mushroom, flower, star }
+        let powerUps = []; // Array of { type, x, y, collected, size }
+        const POWER_UP_SIZE = 48;
+
+        // Ground tile
+        let groundTileImage = null;
+        const GROUND_TILE_SIZE = 32;
 
         // Trait manifest
         let manifest = null;
@@ -285,11 +386,64 @@
             }
         }
 
+        // Load power-up images
+        async function loadPowerUps() {
+            const types = ['mushroom', 'flower', 'star'];
+            for (const type of types) {
+                const img = new Image();
+                img.src = `assets/${type}.png`;
+                await new Promise(resolve => {
+                    img.onload = resolve;
+                    img.onerror = resolve;
+                });
+                powerUpImages[type] = img;
+            }
+        }
+
+        // Position power-ups for a new round
+        function generatePowerUps() {
+            const groundY = ANCHOR_Y + STRING_LENGTH + PUNK_SIZE + 50;
+            powerUps = [];
+
+            // Spread power-ups throughout the sky
+            // More mushrooms at lower heights, flowers in middle, stars higher up
+            const powerUpConfig = [
+                // Mushrooms: 20-80m range (more common, lower)
+                { type: 'mushroom', minHeight: 20, maxHeight: 40, boost: 10 },
+                { type: 'mushroom', minHeight: 35, maxHeight: 55, boost: 10 },
+                { type: 'mushroom', minHeight: 50, maxHeight: 70, boost: 10 },
+                { type: 'mushroom', minHeight: 60, maxHeight: 85, boost: 10 },
+                // Flowers: 40-120m range (medium)
+                { type: 'flower', minHeight: 40, maxHeight: 65, boost: 12 },
+                { type: 'flower', minHeight: 70, maxHeight: 95, boost: 12 },
+                { type: 'flower', minHeight: 90, maxHeight: 120, boost: 12 },
+                // Stars: 80-200m range (rarer, higher reward)
+                { type: 'star', minHeight: 80, maxHeight: 110, boost: 15 },
+                { type: 'star', minHeight: 110, maxHeight: 150, boost: 15 },
+                { type: 'star', minHeight: 150, maxHeight: 200, boost: 15 },
+            ];
+
+            for (const config of powerUpConfig) {
+                const heightMeters = config.minHeight + Math.random() * (config.maxHeight - config.minHeight);
+                powerUps.push({
+                    type: config.type,
+                    x: 40 + Math.random() * (CANVAS_WIDTH - 80),
+                    y: groundY - heightMeters * PIXELS_PER_METER,
+                    collected: false,
+                    boost: config.boost
+                });
+            }
+        }
+
         // Load manifest and initialize
         async function init() {
             try {
-                // Load clouds first
+                // Load clouds, power-ups, and ground tile first
                 await loadClouds();
+                await loadPowerUps();
+                groundTileImage = new Image();
+                groundTileImage.src = 'assets/ground-tile.png';
+                await new Promise(resolve => { groundTileImage.onload = resolve; });
                 generateClouds();
 
                 const response = await fetch('assets/traits/manifest.json');
@@ -426,22 +580,24 @@
 
             // Create walls to contain the punk (very tall to cover flight path)
             const wallThickness = 50;
-            const wallHeight = 50000; // Tall enough for high flights
+            const wallHeight = 100000; // Tall enough for high flights
+            // Center walls vertically to cover from ground (y~700) to high up (y~-50000)
+            const wallCenterY = -wallHeight / 2 + 1000;
 
             const leftWall = Bodies.rectangle(
                 -wallThickness / 2,
-                -wallHeight / 2,
+                wallCenterY,
                 wallThickness,
                 wallHeight,
-                { isStatic: true, restitution: 0.8, label: 'wall' }
+                { isStatic: true, restitution: 0.5, friction: 0, label: 'wall' }
             );
 
             const rightWall = Bodies.rectangle(
                 CANVAS_WIDTH + wallThickness / 2,
-                -wallHeight / 2,
+                wallCenterY,
                 wallThickness,
                 wallHeight,
-                { isStatic: true, restitution: 0.8, label: 'wall' }
+                { isStatic: true, restitution: 0.5, friction: 0, label: 'wall' }
             );
 
             Composite.add(engine.world, [anchor, punk, string, leftWall, rightWall]);
@@ -459,6 +615,7 @@
 
             createPunkCanvas();
             setupPhysics();
+            generatePowerUps();
 
             // Initialize camera to show the swing area
             // Punk starts at ANCHOR_Y + STRING_LENGTH, we want that near bottom of screen
@@ -527,6 +684,28 @@
                 const targetCameraY = punk.position.y - CANVAS_HEIGHT / 2;
                 cameraY = targetCameraY;
 
+                // Check for power-up collisions
+                for (const powerUp of powerUps) {
+                    if (!powerUp.collected) {
+                        const dx = punk.position.x - powerUp.x;
+                        const dy = punk.position.y - powerUp.y;
+                        const distance = Math.sqrt(dx * dx + dy * dy);
+                        const collisionDist = (PUNK_SIZE + POWER_UP_SIZE) / 2;
+
+                        if (distance < collisionDist) {
+                            // Collected!
+                            powerUp.collected = true;
+
+                            // Apply upward boost
+                            const currentVel = punk.velocity;
+                            Body.setVelocity(punk, {
+                                x: currentVel.x,
+                                y: currentVel.y - powerUp.boost // Boost upward (negative Y)
+                            });
+                        }
+                    }
+                }
+
                 // Check if punk has fallen back down past the ground
                 if (punk.velocity.y > 0 && punk.position.y > groundY + 200) {
                     endGame();
@@ -551,6 +730,9 @@
 
             // Draw clouds
             drawClouds();
+
+            // Draw power-ups
+            drawPowerUps();
 
             // Draw string
             if (!released) {
@@ -587,25 +769,24 @@
             ctx.drawImage(punkCanvas, -PUNK_SIZE / 2, -PUNK_SIZE / 2, PUNK_SIZE, PUNK_SIZE);
             ctx.restore();
 
-            // Draw ground area (when visible)
+            // Draw ground area (when visible) - 2 layers of Mario tiles
             const groundScreenY = groundY - cameraY;
-            if (groundScreenY < CANVAS_HEIGHT + 200) {
-                ctx.fillStyle = '#fff';
-                ctx.fillRect(0, groundY, CANVAS_WIDTH, 500);
+            if (groundScreenY < CANVAS_HEIGHT + 200 && groundTileImage) {
+                ctx.imageSmoothingEnabled = false;
+                const tilesAcross = Math.ceil(CANVAS_WIDTH / GROUND_TILE_SIZE) + 1;
 
-                // Ground line
-                ctx.strokeStyle = '#E56399';
-                ctx.lineWidth = 4;
-                ctx.beginPath();
-                ctx.moveTo(0, groundY);
-                ctx.lineTo(CANVAS_WIDTH, groundY);
-                ctx.stroke();
-
-                // "START" text on ground
-                ctx.fillStyle = '#E56399';
-                ctx.font = '12px "Press Start 2P"';
-                ctx.textAlign = 'center';
-                ctx.fillText('START', CANVAS_WIDTH / 2, groundY + 30);
+                // Draw 2 rows of ground tiles
+                for (let row = 0; row < 2; row++) {
+                    for (let col = 0; col < tilesAcross; col++) {
+                        ctx.drawImage(
+                            groundTileImage,
+                            col * GROUND_TILE_SIZE,
+                            groundY + row * GROUND_TILE_SIZE,
+                            GROUND_TILE_SIZE,
+                            GROUND_TILE_SIZE
+                        );
+                    }
+                }
             }
 
             ctx.restore();
@@ -675,6 +856,30 @@
             }
         }
 
+        // Draw power-ups
+        function drawPowerUps() {
+            const viewTop = cameraY - 100;
+            const viewBottom = cameraY + CANVAS_HEIGHT + 100;
+
+            ctx.imageSmoothingEnabled = false;
+
+            for (const powerUp of powerUps) {
+                // Only draw if in view and not collected
+                if (!powerUp.collected && powerUp.y > viewTop && powerUp.y < viewBottom) {
+                    const img = powerUpImages[powerUp.type];
+                    if (img && img.complete) {
+                        ctx.drawImage(
+                            img,
+                            powerUp.x - POWER_UP_SIZE / 2,
+                            powerUp.y - POWER_UP_SIZE / 2,
+                            POWER_UP_SIZE,
+                            POWER_UP_SIZE
+                        );
+                    }
+                }
+            }
+        }
+
         // End the game
         function endGame() {
             gameOver = true;
@@ -698,6 +903,13 @@
         // Restart the game
         async function restartGame() {
             gameoverModal.classList.add('hidden');
+
+            // Reset submit button state
+            const submitBtn = document.getElementById('submit-score-btn');
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'SUBMIT';
+            document.getElementById('submitted-msg').style.display = 'none';
+
             await generateRandomPunk();
             startGame();
         }
@@ -796,8 +1008,89 @@
         // Prevent scrolling on mobile
         document.body.addEventListener('touchmove', (e) => e.preventDefault(), { passive: false });
 
+        // ============ LEADERBOARD ============
+
+        async function fetchLeaderboard() {
+            try {
+                const res = await fetch(`${API_BASE}/leaderboard?game=${GAME_ID}&limit=10`);
+                const data = await res.json();
+                if (data.success && data.entries) {
+                    renderLeaderboard(data.entries);
+                }
+            } catch (e) {
+                console.error('Failed to fetch leaderboard:', e);
+            }
+        }
+
+        function renderLeaderboard(entries) {
+            const container = document.getElementById('leaderboard-entries');
+            if (entries.length === 0) {
+                container.innerHTML = '<div class="leaderboard-entry"><span class="name">No scores yet!</span></div>';
+                return;
+            }
+            const html = entries.map((entry, i) => `
+                <div class="leaderboard-entry">
+                    <span class="rank">${entry.rank || i + 1}.</span>
+                    <span class="name">${entry.name || 'Anon'}</span>
+                    <span class="score">${entry.score}m</span>
+                </div>
+            `).join('');
+            container.innerHTML = html;
+        }
+
+        async function submitScore(name, score) {
+            try {
+                const res = await fetch(`${API_BASE}/leaderboard`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        game: GAME_ID,
+                        name: name || 'Anon',
+                        score: score,
+                        address: '0x0000000000000000000000000000000000000000'
+                    })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    document.getElementById('submitted-msg').style.display = 'block';
+                    document.getElementById('submitted-msg').textContent =
+                        data.rank ? `Score submitted! Rank #${data.rank}` : 'Score submitted!';
+                    await fetchLeaderboard();
+                }
+                return data;
+            } catch (e) {
+                console.error('Failed to submit score:', e);
+                return null;
+            }
+        }
+
+        function setupLeaderboardUI() {
+            const submitBtn = document.getElementById('submit-score-btn');
+            const nameInput = document.getElementById('player-name');
+
+            // Load saved name
+            const savedName = localStorage.getItem('flingPunkName') || '';
+            nameInput.value = savedName;
+
+            submitBtn.addEventListener('click', async () => {
+                const name = nameInput.value.trim() || 'Anon';
+                localStorage.setItem('flingPunkName', name);
+
+                submitBtn.disabled = true;
+                submitBtn.textContent = '...';
+
+                await submitScore(name, maxHeight);
+
+                submitBtn.textContent = 'DONE!';
+            });
+
+            // Fetch initial leaderboard
+            fetchLeaderboard();
+        }
+
         // Initialize
         init();
+        setupLeaderboardUI();
     </script>
 </body>
 </html>

@@ -3,9 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta name="x-ogp-key" content="64ee7b61-3b07-437b-bcea-565ee94a0ddc" id="ogp-key-meta" />
     <title>Fling Punk</title>
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
+    <script src="https://sdk.play.fun/latest"></script>
     <style>
         * {
             margin: 0;
@@ -289,6 +291,24 @@
         const API_BASE = 'https://mann.cool/api';
         const GAME_ID = 'flingpunk';
 
+        // Play.fun SDK
+        const PLAYFUN_GAME_ID = '64ee7b61-3b07-437b-bcea-565ee94a0ddc';
+        let playfunSDK = null;
+
+        async function initPlayFun() {
+            try {
+                playfunSDK = new PlayFunSDK({
+                    gameId: PLAYFUN_GAME_ID,
+                    ui: { usePointsWidget: true }
+                });
+                await playfunSDK.init();
+                console.log('Play.fun SDK initialized');
+            } catch (e) {
+                console.warn('Play.fun SDK failed to initialize:', e);
+                playfunSDK = null;
+            }
+        }
+
         // Game constants
         const CANVAS_WIDTH = 400;
         const CANVAS_HEIGHT = 700;
@@ -323,7 +343,7 @@
         let powerUps = []; // Array of { type, x, y, collected, size }
         const POWER_UP_SIZE = 48;
         let highestGeneratedHeight = 0; // Track how far we've generated power-ups
-        const POWER_UP_DENSITY = 8; // Power-ups per 100 meters
+        const POWER_UP_DENSITY = 11; // Power-ups per 100 meters
         const GENERATION_BUFFER = 200; // Generate this many meters ahead
 
         // Ground tile
@@ -452,7 +472,9 @@
         // Extend power-ups ahead of the punk as it climbs
         function extendPowerUpsIfNeeded(currentHeightMeters) {
             const targetHeight = currentHeightMeters + GENERATION_BUFFER;
-            if (targetHeight > highestGeneratedHeight) {
+            // Only generate when enough range has accumulated to produce at least 1 power-up
+            const minBatch = 100 / POWER_UP_DENSITY;
+            if (targetHeight >= highestGeneratedHeight + minBatch) {
                 generatePowerUpsInRange(highestGeneratedHeight, targetHeight);
                 highestGeneratedHeight = targetHeight;
                 
@@ -747,6 +769,7 @@
                     endGame();
                 }
             }
+
         }
 
         // Render the game
@@ -930,6 +953,16 @@
                 newRecord.style.display = 'block';
             } else {
                 newRecord.style.display = 'none';
+            }
+
+            // Award Play.fun points: 1 point per meter of max height
+            if (playfunSDK && maxHeight > 0) {
+                playfunSDK.addPoints(maxHeight);
+                playfunSDK.savePoints().then(() => {
+                    console.log(`Play.fun: saved ${maxHeight} points`);
+                }).catch(e => {
+                    console.warn('Play.fun: failed to save points:', e);
+                });
             }
 
             finalScore.textContent = `${maxHeight}m`;
@@ -1126,6 +1159,7 @@
 
         // Initialize
         init();
+        initPlayFun();
         setupLeaderboardUI();
     </script>
 </body>

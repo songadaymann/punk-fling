@@ -240,9 +240,14 @@
         }
 
         // Game state
-        let engine, runner;
+        let engine;
         let punk, anchor, string;
         let leftWall, rightWall;
+
+        // Fixed-timestep physics (ensures consistent speed across all devices/framerates)
+        const FIXED_STEP = 1000 / 60;
+        let lastTime = 0;
+        let accumulator = 0;
         let punkCanvas, punkCtx;
         let isHolding = false;
         let gameStarted = false;
@@ -308,6 +313,9 @@
             if (!gameStarted || gameOver || !punk) return;
 
             const scaleRatio = SCALE / oldScale;
+
+            // Scale gravity to match new scale
+            engine.gravity.y = GRAVITY * SCALE;
             const newGroundY = ANCHOR_Y + STRING_LENGTH + PUNK_SIZE + 50 * SCALE;
 
             if (!released) {
@@ -619,7 +627,7 @@
         // Setup Matter.js physics
         function setupPhysics() {
             engine = Engine.create();
-            engine.gravity.y = GRAVITY;
+            engine.gravity.y = GRAVITY * SCALE;
 
             // Create anchor point (static)
             anchor = Bodies.circle(CANVAS_WIDTH / 2, ANCHOR_Y, 5, {
@@ -692,19 +700,36 @@
             // Punk starts at ANCHOR_Y + STRING_LENGTH, we want that near bottom of screen
             cameraY = ANCHOR_Y - CANVAS_HEIGHT / 3;
 
-            // Start physics loop
-            runner = Runner.create();
-            Runner.run(runner, engine);
+            // Reset timing for fixed-timestep loop
+            lastTime = 0;
+            accumulator = 0;
 
-            // Start render loop
+            // Start game loop (physics + render in one synchronized loop)
             requestAnimationFrame(gameLoop);
         }
 
-        // Main game loop
-        function gameLoop() {
+        // Main game loop — fixed-timestep physics with variable-rate rendering
+        function gameLoop(timestamp) {
             if (!gameStarted) return;
 
-            update();
+            // Initialize lastTime on first frame
+            if (lastTime === 0) lastTime = timestamp;
+            let elapsed = timestamp - lastTime;
+            lastTime = timestamp;
+
+            // Cap elapsed to prevent spiral of death (e.g. tab was backgrounded)
+            if (elapsed > 200) elapsed = 200;
+
+            accumulator += elapsed;
+
+            // Run physics in fixed steps for consistent behavior across all devices
+            while (accumulator >= FIXED_STEP && !gameOver) {
+                update();
+                if (gameOver) break;
+                Engine.update(engine, FIXED_STEP);
+                accumulator -= FIXED_STEP;
+            }
+
             render();
 
             if (!gameOver) {
@@ -961,7 +986,6 @@
         // End the game
         function endGame() {
             gameOver = true;
-            Runner.stop(runner);
             Composite.clear(engine.world);
 
             // Check for new record

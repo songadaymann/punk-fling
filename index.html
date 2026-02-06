@@ -322,6 +322,9 @@
         let powerUpImages = {}; // { mushroom, flower, star }
         let powerUps = []; // Array of { type, x, y, collected, size }
         const POWER_UP_SIZE = 48;
+        let highestGeneratedHeight = 0; // Track how far we've generated power-ups
+        const POWER_UP_DENSITY = 8; // Power-ups per 100 meters
+        const GENERATION_BUFFER = 200; // Generate this many meters ahead
 
         // Ground tile
         let groundTileImage = null;
@@ -400,37 +403,65 @@
             }
         }
 
-        // Position power-ups for a new round
-        function generatePowerUps() {
+        // Power-up type definitions with probabilities and boosts
+        const POWER_UP_TYPES = [
+            { type: 'mushroom', weight: 50, boost: 10 },  // 50% chance
+            { type: 'flower', weight: 35, boost: 12 },    // 35% chance
+            { type: 'star', weight: 15, boost: 15 },      // 15% chance
+        ];
+        const TOTAL_WEIGHT = POWER_UP_TYPES.reduce((sum, p) => sum + p.weight, 0);
+
+        // Get a random power-up type based on weights
+        function getRandomPowerUpType() {
+            let rand = Math.random() * TOTAL_WEIGHT;
+            for (const powerUp of POWER_UP_TYPES) {
+                rand -= powerUp.weight;
+                if (rand <= 0) return powerUp;
+            }
+            return POWER_UP_TYPES[0];
+        }
+
+        // Generate power-ups in a height range (in meters)
+        function generatePowerUpsInRange(fromHeight, toHeight) {
             const groundY = ANCHOR_Y + STRING_LENGTH + PUNK_SIZE + 50;
-            powerUps = [];
+            const heightRange = toHeight - fromHeight;
+            const numPowerUps = Math.floor(heightRange * POWER_UP_DENSITY / 100);
 
-            // Spread power-ups throughout the sky
-            // More mushrooms at lower heights, flowers in middle, stars higher up
-            const powerUpConfig = [
-                // Mushrooms: 20-80m range (more common, lower)
-                { type: 'mushroom', minHeight: 20, maxHeight: 40, boost: 10 },
-                { type: 'mushroom', minHeight: 35, maxHeight: 55, boost: 10 },
-                { type: 'mushroom', minHeight: 50, maxHeight: 70, boost: 10 },
-                { type: 'mushroom', minHeight: 60, maxHeight: 85, boost: 10 },
-                // Flowers: 40-120m range (medium)
-                { type: 'flower', minHeight: 40, maxHeight: 65, boost: 12 },
-                { type: 'flower', minHeight: 70, maxHeight: 95, boost: 12 },
-                { type: 'flower', minHeight: 90, maxHeight: 120, boost: 12 },
-                // Stars: 80-200m range (rarer, higher reward)
-                { type: 'star', minHeight: 80, maxHeight: 110, boost: 15 },
-                { type: 'star', minHeight: 110, maxHeight: 150, boost: 15 },
-                { type: 'star', minHeight: 150, maxHeight: 200, boost: 15 },
-            ];
-
-            for (const config of powerUpConfig) {
-                const heightMeters = config.minHeight + Math.random() * (config.maxHeight - config.minHeight);
+            for (let i = 0; i < numPowerUps; i++) {
+                const heightMeters = fromHeight + Math.random() * heightRange;
+                const powerUpType = getRandomPowerUpType();
                 powerUps.push({
-                    type: config.type,
+                    type: powerUpType.type,
                     x: 40 + Math.random() * (CANVAS_WIDTH - 80),
                     y: groundY - heightMeters * PIXELS_PER_METER,
                     collected: false,
-                    boost: config.boost
+                    boost: powerUpType.boost
+                });
+            }
+        }
+
+        // Initialize power-ups for a new round
+        function generatePowerUps() {
+            powerUps = [];
+            highestGeneratedHeight = 0;
+            // Generate initial batch from 20m to GENERATION_BUFFER
+            generatePowerUpsInRange(20, GENERATION_BUFFER);
+            highestGeneratedHeight = GENERATION_BUFFER;
+        }
+
+        // Extend power-ups ahead of the punk as it climbs
+        function extendPowerUpsIfNeeded(currentHeightMeters) {
+            const targetHeight = currentHeightMeters + GENERATION_BUFFER;
+            if (targetHeight > highestGeneratedHeight) {
+                generatePowerUpsInRange(highestGeneratedHeight, targetHeight);
+                highestGeneratedHeight = targetHeight;
+                
+                // Clean up collected power-ups that are way below to save memory
+                const cleanupThreshold = currentHeightMeters - 100;
+                powerUps = powerUps.filter(p => {
+                    const groundY = ANCHOR_Y + STRING_LENGTH + PUNK_SIZE + 50;
+                    const pHeight = (groundY - p.y) / PIXELS_PER_METER;
+                    return pHeight > cleanupThreshold || !p.collected;
                 });
             }
         }
@@ -667,6 +698,11 @@
                 maxHeight = heightMeters;
             }
             heightDisplay.textContent = `${maxHeight}m`;
+            
+            // Dynamically generate more power-ups as we climb
+            if (released) {
+                extendPowerUpsIfNeeded(heightMeters);
+            }
 
             // After release, update trail and camera
             if (released) {

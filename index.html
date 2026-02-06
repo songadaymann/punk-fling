@@ -271,7 +271,7 @@
         let powerUpImages = {}; // { mushroom, flower, star }
         let powerUps = []; // Array of { type, x, y, collected, size }
         let highestGeneratedHeight = 0; // Track how far we've generated power-ups
-        const POWER_UP_DENSITY = 8; // Power-ups per 100 meters
+        const POWER_UP_BASE_DENSITY = 8; // Base power-ups per 100 meters (at ground level)
         const GENERATION_BUFFER = 200; // Generate this many meters ahead
 
         // Ground tile
@@ -467,10 +467,20 @@
         }
 
         // Generate power-ups in a height range (in meters)
+        // Density decreases with altitude + random variance per chunk,
+        // so runs naturally end but you never know exactly when.
         function generatePowerUpsInRange(fromHeight, toHeight) {
             const groundY = ANCHOR_Y + STRING_LENGTH + PUNK_SIZE + 50 * SCALE;
             const heightRange = toHeight - fromHeight;
-            const numPowerUps = Math.floor(heightRange * POWER_UP_DENSITY / 100);
+            const midHeight = (fromHeight + toHeight) / 2;
+
+            // Density decays with altitude: 1.0 at ground, ~0.5 at 400m, ~0.25 at 1200m
+            const heightFactor = 1 / (1 + midHeight / 400);
+            // Random roll per chunk: 0.3x (dry spell) to 2.0x (lucky streak)
+            const randomFactor = 0.3 + Math.random() * 1.7;
+            const effectiveDensity = POWER_UP_BASE_DENSITY * heightFactor * randomFactor;
+
+            const numPowerUps = Math.floor(heightRange * effectiveDensity / 100);
 
             for (let i = 0; i < numPowerUps; i++) {
                 const heightMeters = fromHeight + Math.random() * heightRange;
@@ -498,7 +508,7 @@
         function extendPowerUpsIfNeeded(currentHeightMeters) {
             const targetHeight = currentHeightMeters + GENERATION_BUFFER;
             // Only generate when enough range has accumulated to produce at least 1 power-up
-            const minBatch = 100 / POWER_UP_DENSITY;
+            const minBatch = 100 / POWER_UP_BASE_DENSITY;
             if (targetHeight >= highestGeneratedHeight + minBatch) {
                 generatePowerUpsInRange(highestGeneratedHeight, targetHeight);
                 highestGeneratedHeight = targetHeight;

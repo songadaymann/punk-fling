@@ -160,90 +160,6 @@
             flex-direction: column;
             align-items: center;
         }
-
-        .leaderboard {
-            width: 100%;
-            max-width: 400px;
-            background: white;
-            border: 4px solid #E56399;
-            border-top: none;
-            padding: 10px;
-        }
-
-        .leaderboard h3 {
-            font-size: 8px;
-            color: #E56399;
-            margin-bottom: 8px;
-            text-align: center;
-        }
-
-        .leaderboard-entries-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 0 15px;
-        }
-
-        .leaderboard-entry {
-            display: flex;
-            justify-content: space-between;
-            font-size: 7px;
-            color: #E56399;
-            padding: 3px 0;
-            border-bottom: 1px solid rgba(229, 99, 153, 0.2);
-        }
-
-        .leaderboard-entry .rank {
-            width: 18px;
-        }
-
-        .leaderboard-entry .name {
-            flex: 1;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-        }
-
-        .leaderboard-entry .score {
-            width: 35px;
-            text-align: right;
-        }
-
-        .modal input {
-            width: 100%;
-            padding: 10px;
-            font-size: 10px;
-            font-family: 'Press Start 2P', monospace;
-            border: 2px solid #E56399;
-            margin-bottom: 10px;
-            text-align: center;
-            text-transform: uppercase;
-        }
-
-        .modal input::placeholder {
-            color: #ccc;
-        }
-
-        .modal .submit-row {
-            display: flex;
-            gap: 10px;
-            justify-content: center;
-        }
-
-        .modal button.secondary {
-            background: white;
-            color: #E56399;
-            border: 2px solid #E56399;
-        }
-
-        .modal button.secondary:hover {
-            background: #f8e8ef;
-        }
-
-        .modal .submitted-msg {
-            font-size: 8px;
-            color: #E56399;
-            margin-top: 10px;
-        }
     </style>
 </head>
 <body>
@@ -267,18 +183,7 @@
                 <h2>NICE FLING!</h2>
                 <div class="score" id="final-score">0m</div>
                 <p id="new-record" style="color: #4ecdc4; display: none;">NEW RECORD!</p>
-                <input type="text" id="player-name" placeholder="YOUR NAME" maxlength="12" />
-                <div class="submit-row">
-                    <button id="submit-score-btn">SUBMIT</button>
-                    <button id="restart-btn" class="secondary">SKIP</button>
-                </div>
-                <p class="submitted-msg" id="submitted-msg" style="display:none;">Score submitted!</p>
-            </div>
-        </div>
-        <div class="leaderboard" id="leaderboard">
-            <h3>TOP SCORES</h3>
-            <div class="leaderboard-entries-grid" id="leaderboard-entries">
-                <div class="leaderboard-entry"><span class="rank">-</span><span class="name">Loading...</span><span class="score">-</span></div>
+                <button id="restart-btn">PLAY AGAIN</button>
             </div>
         </div>
     </div>
@@ -286,10 +191,6 @@
     <script>
         // Matter.js modules
         const { Engine, Render, Runner, Bodies, Body, Composite, Constraint, Events, Mouse, Vector } = Matter;
-
-        // Leaderboard API
-        const API_BASE = 'https://mann.cool/api';
-        const GAME_ID = 'flingpunk';
 
         // Play.fun SDK
         const PLAYFUN_GAME_ID = '64ee7b61-3b07-437b-bcea-565ee94a0ddc';
@@ -972,13 +873,6 @@
         // Restart the game
         async function restartGame() {
             gameoverModal.classList.add('hidden');
-
-            // Reset submit button state
-            const submitBtn = document.getElementById('submit-score-btn');
-            submitBtn.disabled = false;
-            submitBtn.textContent = 'SUBMIT';
-            document.getElementById('submitted-msg').style.display = 'none';
-
             await generateRandomPunk();
             startGame();
         }
@@ -1077,90 +971,9 @@
         // Prevent scrolling on mobile
         document.body.addEventListener('touchmove', (e) => e.preventDefault(), { passive: false });
 
-        // ============ LEADERBOARD ============
-
-        async function fetchLeaderboard() {
-            try {
-                const res = await fetch(`${API_BASE}/leaderboard?game=${GAME_ID}&limit=10`);
-                const data = await res.json();
-                if (data.success && data.entries) {
-                    renderLeaderboard(data.entries);
-                }
-            } catch (e) {
-                console.error('Failed to fetch leaderboard:', e);
-            }
-        }
-
-        function renderLeaderboard(entries) {
-            const container = document.getElementById('leaderboard-entries');
-            if (entries.length === 0) {
-                container.innerHTML = '<div class="leaderboard-entry"><span class="name">No scores yet!</span></div>';
-                return;
-            }
-            const html = entries.map((entry, i) => `
-                <div class="leaderboard-entry">
-                    <span class="rank">${entry.rank || i + 1}.</span>
-                    <span class="name">${entry.name || 'Anon'}</span>
-                    <span class="score">${entry.score}m</span>
-                </div>
-            `).join('');
-            container.innerHTML = html;
-        }
-
-        async function submitScore(name, score) {
-            try {
-                const res = await fetch(`${API_BASE}/leaderboard`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        game: GAME_ID,
-                        name: name || 'Anon',
-                        score: score,
-                        address: '0x0000000000000000000000000000000000000000'
-                    })
-                });
-                const data = await res.json();
-                if (data.success) {
-                    document.getElementById('submitted-msg').style.display = 'block';
-                    document.getElementById('submitted-msg').textContent =
-                        data.rank ? `Score submitted! Rank #${data.rank}` : 'Score submitted!';
-                    await fetchLeaderboard();
-                }
-                return data;
-            } catch (e) {
-                console.error('Failed to submit score:', e);
-                return null;
-            }
-        }
-
-        function setupLeaderboardUI() {
-            const submitBtn = document.getElementById('submit-score-btn');
-            const nameInput = document.getElementById('player-name');
-
-            // Load saved name
-            const savedName = localStorage.getItem('flingPunkName') || '';
-            nameInput.value = savedName;
-
-            submitBtn.addEventListener('click', async () => {
-                const name = nameInput.value.trim() || 'Anon';
-                localStorage.setItem('flingPunkName', name);
-
-                submitBtn.disabled = true;
-                submitBtn.textContent = '...';
-
-                await submitScore(name, maxHeight);
-
-                submitBtn.textContent = 'DONE!';
-            });
-
-            // Fetch initial leaderboard
-            fetchLeaderboard();
-        }
-
         // Initialize
         init();
         initPlayFun();
-        setupLeaderboardUI();
     </script>
 </body>
 </html>

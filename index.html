@@ -255,6 +255,7 @@
         let isHolding = false;
         let gameStarted = false;
         let gameOver = false;
+        let frozen = false;
         let released = false;
         let cameraY = 0;
         let maxHeight = 0;
@@ -719,6 +720,7 @@
             startModal.classList.add('hidden');
             gameStarted = true;
             gameOver = false;
+            frozen = false;
             released = false;
             isHolding = false;
             maxHeight = 0;
@@ -759,9 +761,10 @@
             accumulator += elapsed;
 
             // Run physics in fixed steps for consistent behavior across all devices
-            while (accumulator >= FIXED_STEP && !gameOver) {
+            // Skip physics when frozen (apex freeze-frame effect)
+            while (accumulator >= FIXED_STEP && !gameOver && !frozen) {
                 update();
-                if (gameOver) break;
+                if (gameOver || frozen) break;
                 Engine.update(engine, FIXED_STEP);
                 accumulator -= FIXED_STEP;
             }
@@ -843,8 +846,16 @@
                     }
                 }
 
-                // Check if punk has fallen back down past the ground
-                if (punk.velocity.y > 0 && punk.position.y > groundY + 200 * SCALE) {
+                // Detect apex: punk is falling and has dropped 3m from peak
+                // Freeze the frame for a dramatic pause before showing score
+                if (!frozen && punk.velocity.y > 0 && maxHeight > 3 && (maxHeight - heightMeters) > 3) {
+                    frozen = true;
+                    setTimeout(() => endGame(), 800);
+                    return;
+                }
+
+                // Fallback: punk fell below ground (very short runs)
+                if (!frozen && punk.velocity.y > 0 && punk.position.y > groundY + 200 * SCALE) {
                     endGame();
                 }
             }

@@ -466,6 +466,31 @@
             return POWER_UP_TYPES[0];
         }
 
+        // Density range at a given altitude (power-ups per 100m)
+        // Returns { min, max } interpolated between breakpoints
+        const DENSITY_CURVE = [
+            //  [height, min, max]
+            [0,     11, 20],
+            [400,    8, 11],
+            [1000,   6,  8],
+            [2000,   3,  6],
+            [3000,   2,  4],
+            [5000,   1,  2],
+        ];
+
+        function getDensityRange(height) {
+            for (let i = 0; i < DENSITY_CURVE.length - 1; i++) {
+                if (height <= DENSITY_CURVE[i + 1][0]) {
+                    const [h0, min0, max0] = DENSITY_CURVE[i];
+                    const [h1, min1, max1] = DENSITY_CURVE[i + 1];
+                    const t = (height - h0) / (h1 - h0);
+                    return { min: min0 + t * (min1 - min0), max: max0 + t * (max1 - max0) };
+                }
+            }
+            const last = DENSITY_CURVE[DENSITY_CURVE.length - 1];
+            return { min: last[1], max: last[2] };
+        }
+
         // Generate power-ups in a height range (in meters)
         // Density decreases with altitude + random variance per chunk,
         // so runs naturally end but you never know exactly when.
@@ -474,11 +499,9 @@
             const heightRange = toHeight - fromHeight;
             const midHeight = (fromHeight + toHeight) / 2;
 
-            // Density decays with altitude: 1.0 at ground, ~0.5 at 400m, ~0.25 at 1200m
-            const heightFactor = 1 / (1 + midHeight / 400);
-            // Random roll per chunk: 0.3x (dry spell) to 2.0x (lucky streak)
-            const randomFactor = 0.3 + Math.random() * 1.7;
-            const effectiveDensity = POWER_UP_BASE_DENSITY * heightFactor * randomFactor;
+            // Look up density range for this altitude and roll randomly within it
+            const { min, max } = getDensityRange(midHeight);
+            const effectiveDensity = min + Math.random() * (max - min);
 
             const numPowerUps = Math.floor(heightRange * effectiveDensity / 100);
 

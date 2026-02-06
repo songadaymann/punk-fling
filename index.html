@@ -30,14 +30,12 @@
 
         #game-container {
             position: relative;
-            width: 400px;
-            height: 700px;
-            max-width: 100vw;
-            max-height: 100vh;
+            width: 100vw;
+            height: 100vh;
+            max-width: calc(100vh * 9 / 16);
             background: #E56399;
-            border-radius: 8px;
             overflow: hidden;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+            margin: 0 auto;
         }
 
         #game-canvas {
@@ -59,9 +57,10 @@
             top: 10px;
             right: 10px;
             color: #fff;
-            font-size: 14px;
+            font-size: clamp(10px, 3vw, 14px);
             text-shadow: 2px 2px 0 #000;
             pointer-events: none;
+            z-index: 10;
         }
 
         #best-display {
@@ -69,10 +68,11 @@
             top: 35px;
             right: 10px;
             color: #fff;
-            font-size: 10px;
+            font-size: clamp(7px, 2.2vw, 10px);
             text-shadow: 1px 1px 0 #000;
             pointer-events: none;
             opacity: 0.8;
+            z-index: 10;
         }
 
         #instructions {
@@ -81,10 +81,11 @@
             left: 0;
             right: 0;
             color: #fff;
-            font-size: 8px;
+            font-size: clamp(6px, 2vw, 8px);
             text-align: center;
             text-shadow: 1px 1px 0 #000;
             pointer-events: none;
+            z-index: 10;
         }
 
         .modal {
@@ -107,23 +108,24 @@
 
         .modal h2 {
             color: #E56399;
-            font-size: 24px;
+            font-size: clamp(16px, 5vw, 24px);
             margin-bottom: 20px;
             text-shadow: 2px 2px 0 #000;
         }
 
         .modal p {
             color: #fff;
-            font-size: 10px;
+            font-size: clamp(8px, 2.5vw, 10px);
             margin-bottom: 10px;
             text-align: center;
-            max-width: 300px;
+            max-width: 80%;
             line-height: 1.8;
+            padding: 0 10px;
         }
 
         .modal .score {
             color: #4ecdc4;
-            font-size: 32px;
+            font-size: clamp(20px, 7vw, 32px);
             margin: 20px 0;
         }
 
@@ -133,7 +135,7 @@
             border: none;
             padding: 15px 30px;
             font-family: 'Press Start 2P', monospace;
-            font-size: 12px;
+            font-size: clamp(10px, 3vw, 12px);
             cursor: pointer;
             margin-top: 20px;
             transition: transform 0.1s;
@@ -155,16 +157,10 @@
             image-rendering: crisp-edges;
         }
 
-        .wrapper {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-        }
     </style>
 </head>
 <body>
-    <div class="wrapper">
-        <div id="game-container">
+    <div id="game-container">
             <canvas id="game-canvas"></canvas>
 
             <div id="height-display">0m</div>
@@ -185,7 +181,6 @@
                 <p id="new-record" style="color: #4ecdc4; display: none;">NEW RECORD!</p>
                 <button id="restart-btn">PLAY AGAIN</button>
             </div>
-        </div>
     </div>
 
     <script>
@@ -210,19 +205,44 @@
             }
         }
 
-        // Game constants
-        const CANVAS_WIDTH = 400;
-        const CANVAS_HEIGHT = 700;
-        const PUNK_SIZE = 64;
-        const STRING_LENGTH = 150;
+        // Design base resolution (all game logic is authored against this)
+        const BASE_WIDTH = 400;
+        const BASE_HEIGHT = 700;
+
+        // Actual canvas size — matches container (9:16 capped on desktop)
+        const container = document.getElementById('game-container');
+        let CANVAS_WIDTH = container.clientWidth || window.innerWidth;
+        let CANVAS_HEIGHT = container.clientHeight || window.innerHeight;
+
+        // Scale factor: how much bigger/smaller the viewport is vs the design base
+        let SCALE = Math.min(CANVAS_WIDTH / BASE_WIDTH, CANVAS_HEIGHT / BASE_HEIGHT);
+
+        // Scaled game constants
+        let PUNK_SIZE = 64 * SCALE;
+        let STRING_LENGTH = 150 * SCALE;
+        let PIXELS_PER_METER = 40 * SCALE;
+        let ANCHOR_Y = CANVAS_HEIGHT * 0.53; // ~53% down the screen
+        let POWER_UP_SIZE_SCALED = 48 * SCALE;
+        let GROUND_TILE_SIZE_SCALED = 32 * SCALE;
         const GRAVITY = 0.8;
         const SWING_FORCE = 0.002;
-        const PIXELS_PER_METER = 40;
-        const ANCHOR_Y = 372;
+
+        function recalcScale() {
+            CANVAS_WIDTH = container.clientWidth;
+            CANVAS_HEIGHT = container.clientHeight;
+            SCALE = Math.min(CANVAS_WIDTH / BASE_WIDTH, CANVAS_HEIGHT / BASE_HEIGHT);
+            PUNK_SIZE = 64 * SCALE;
+            STRING_LENGTH = 150 * SCALE;
+            PIXELS_PER_METER = 40 * SCALE;
+            ANCHOR_Y = CANVAS_HEIGHT * 0.53;
+            POWER_UP_SIZE_SCALED = 48 * SCALE;
+            GROUND_TILE_SIZE_SCALED = 32 * SCALE;
+        }
 
         // Game state
         let engine, runner;
         let punk, anchor, string;
+        let leftWall, rightWall;
         let punkCanvas, punkCtx;
         let isHolding = false;
         let gameStarted = false;
@@ -242,14 +262,12 @@
         // Power-up system
         let powerUpImages = {}; // { mushroom, flower, star }
         let powerUps = []; // Array of { type, x, y, collected, size }
-        const POWER_UP_SIZE = 48;
         let highestGeneratedHeight = 0; // Track how far we've generated power-ups
         const POWER_UP_DENSITY = 8; // Power-ups per 100 meters
         const GENERATION_BUFFER = 200; // Generate this many meters ahead
 
         // Ground tile
         let groundTileImage = null;
-        const GROUND_TILE_SIZE = 32;
 
         // Trait manifest
         let manifest = null;
@@ -266,10 +284,105 @@
         const punkPreview = document.getElementById('punk-preview');
 
         // Initialize canvases
-        canvas.width = CANVAS_WIDTH;
-        canvas.height = CANVAS_HEIGHT;
+        function resizeCanvas() {
+            recalcScale();
+            canvas.width = CANVAS_WIDTH;
+            canvas.height = CANVAS_HEIGHT;
+        }
+        resizeCanvas();
         punkPreview.width = 96;
         punkPreview.height = 96;
+
+        // Handle resize (e.g. orientation change, iframe resize)
+        window.addEventListener('resize', () => {
+            // Save old values before resize
+            const oldScale = SCALE;
+            const oldCanvasWidth = CANVAS_WIDTH;
+            const oldAnchorY = ANCHOR_Y;
+            const oldPixelsPerMeter = PIXELS_PER_METER;
+            const oldGroundY = ANCHOR_Y + STRING_LENGTH + PUNK_SIZE + 50 * oldScale;
+
+            resizeCanvas();
+
+            // If game isn't actively running with physics, nothing else to do
+            if (!gameStarted || gameOver || !punk) return;
+
+            const scaleRatio = SCALE / oldScale;
+            const newGroundY = ANCHOR_Y + STRING_LENGTH + PUNK_SIZE + 50 * SCALE;
+
+            if (!released) {
+                // Swinging phase: reposition anchor, update constraint
+                Body.setPosition(anchor, { x: CANVAS_WIDTH / 2, y: ANCHOR_Y });
+                string.length = STRING_LENGTH;
+
+                // Scale punk's offset from old anchor position
+                const offsetX = punk.position.x - oldCanvasWidth / 2;
+                const offsetY = punk.position.y - oldAnchorY;
+                Body.setPosition(punk, {
+                    x: CANVAS_WIDTH / 2 + offsetX * scaleRatio,
+                    y: ANCHOR_Y + offsetY * scaleRatio
+                });
+                Body.setVelocity(punk, {
+                    x: punk.velocity.x * scaleRatio,
+                    y: punk.velocity.y * scaleRatio
+                });
+
+                // Reset camera for swing view
+                cameraY = ANCHOR_Y - CANVAS_HEIGHT / 3;
+            } else {
+                // Flying phase: maintain punk's height in meters
+                const heightAboveGround = oldGroundY - punk.position.y;
+                const heightMeters = heightAboveGround / oldPixelsPerMeter;
+                const xRatio = punk.position.x / oldCanvasWidth;
+
+                Body.setPosition(punk, {
+                    x: xRatio * CANVAS_WIDTH,
+                    y: newGroundY - heightMeters * PIXELS_PER_METER
+                });
+                Body.setVelocity(punk, {
+                    x: punk.velocity.x * scaleRatio,
+                    y: punk.velocity.y * scaleRatio
+                });
+
+                // Update camera to follow punk
+                cameraY = punk.position.y - CANVAS_HEIGHT / 2;
+
+                // Remap trail points
+                for (const point of trailPoints) {
+                    const trailHeight = oldGroundY - point.y;
+                    const trailMeters = trailHeight / oldPixelsPerMeter;
+                    point.x = (point.x / oldCanvasWidth) * CANVAS_WIDTH;
+                    point.y = newGroundY - trailMeters * PIXELS_PER_METER;
+                }
+            }
+
+            // Recreate walls for new dimensions
+            if (leftWall) Composite.remove(engine.world, leftWall);
+            if (rightWall) Composite.remove(engine.world, rightWall);
+            const wallThickness = 50;
+            const wallHeight = 100000 * SCALE;
+            const wallCenterY = -wallHeight / 2 + 1000 * SCALE;
+            leftWall = Bodies.rectangle(-wallThickness / 2, wallCenterY, wallThickness, wallHeight,
+                { isStatic: true, restitution: 0.5, friction: 0, label: 'wall' });
+            rightWall = Bodies.rectangle(CANVAS_WIDTH + wallThickness / 2, wallCenterY, wallThickness, wallHeight,
+                { isStatic: true, restitution: 0.5, friction: 0, label: 'wall' });
+            Composite.add(engine.world, [leftWall, rightWall]);
+
+            // Remap power-up positions to new coordinate system
+            for (const powerUp of powerUps) {
+                const pHeight = oldGroundY - powerUp.y;
+                const pMeters = pHeight / oldPixelsPerMeter;
+                powerUp.x = (powerUp.x / oldCanvasWidth) * CANVAS_WIDTH;
+                powerUp.y = newGroundY - pMeters * PIXELS_PER_METER;
+                powerUp.boost = (powerUp.boost / oldScale) * SCALE;
+            }
+
+            // Recreate punk canvas at new size
+            createPunkCanvas();
+
+            // Regenerate clouds for new dimensions
+            generateClouds();
+        });
 
         // Update best display
         bestDisplay.textContent = `BEST: ${bestHeight}m`;
@@ -291,11 +404,11 @@
         // Generate cloud positions throughout the sky
         function generateClouds() {
             clouds = [];
-            const groundY = ANCHOR_Y + STRING_LENGTH + PUNK_SIZE + 50;
-            const maxWorldHeight = 80000; // Enough for 2000m
+            const groundY = ANCHOR_Y + STRING_LENGTH + PUNK_SIZE + 50 * SCALE;
+            const maxWorldHeight = 80000 * SCALE; // Enough for 2000m
 
             // Generate clouds every ~100 pixels (2.5m) with some randomness
-            for (let y = groundY - 200; y > -maxWorldHeight; y -= 80 + Math.random() * 120) {
+            for (let y = groundY - 200 * SCALE; y > -maxWorldHeight; y -= (80 + Math.random() * 120) * SCALE) {
                 // 1-2 clouds per height level
                 const numCloudsAtLevel = Math.random() < 0.4 ? 2 : 1;
 
@@ -304,7 +417,7 @@
                         x: 30 + Math.random() * (CANVAS_WIDTH - 60),
                         y: y + (Math.random() - 0.5) * 40,
                         imageIndex: Math.floor(Math.random() * cloudImages.length),
-                        scale: 0.8 + Math.random() * 0.6 // Random size variation
+                        scale: (0.8 + Math.random() * 0.6) * SCALE // Random size variation, scaled
                     });
                 }
             }
@@ -344,7 +457,7 @@
 
         // Generate power-ups in a height range (in meters)
         function generatePowerUpsInRange(fromHeight, toHeight) {
-            const groundY = ANCHOR_Y + STRING_LENGTH + PUNK_SIZE + 50;
+            const groundY = ANCHOR_Y + STRING_LENGTH + PUNK_SIZE + 50 * SCALE;
             const heightRange = toHeight - fromHeight;
             const numPowerUps = Math.floor(heightRange * POWER_UP_DENSITY / 100);
 
@@ -353,10 +466,10 @@
                 const powerUpType = getRandomPowerUpType();
                 powerUps.push({
                     type: powerUpType.type,
-                    x: 40 + Math.random() * (CANVAS_WIDTH - 80),
+                    x: (40 * SCALE) + Math.random() * (CANVAS_WIDTH - 80 * SCALE),
                     y: groundY - heightMeters * PIXELS_PER_METER,
                     collected: false,
-                    boost: powerUpType.boost
+                    boost: powerUpType.boost * SCALE
                 });
             }
         }
@@ -382,7 +495,7 @@
                 // Clean up collected power-ups that are way below to save memory
                 const cleanupThreshold = currentHeightMeters - 100;
                 powerUps = powerUps.filter(p => {
-                    const groundY = ANCHOR_Y + STRING_LENGTH + PUNK_SIZE + 50;
+                    const groundY = ANCHOR_Y + STRING_LENGTH + PUNK_SIZE + 50 * SCALE;
                     const pHeight = (groundY - p.y) / PIXELS_PER_METER;
                     return pHeight > cleanupThreshold || !p.collected;
                 });
@@ -534,11 +647,11 @@
 
             // Create walls to contain the punk (very tall to cover flight path)
             const wallThickness = 50;
-            const wallHeight = 100000; // Tall enough for high flights
-            // Center walls vertically to cover from ground (y~700) to high up (y~-50000)
-            const wallCenterY = -wallHeight / 2 + 1000;
+            const wallHeight = 100000 * SCALE; // Tall enough for high flights
+            // Center walls vertically to cover from ground to high up
+            const wallCenterY = -wallHeight / 2 + 1000 * SCALE;
 
-            const leftWall = Bodies.rectangle(
+            leftWall = Bodies.rectangle(
                 -wallThickness / 2,
                 wallCenterY,
                 wallThickness,
@@ -546,7 +659,7 @@
                 { isStatic: true, restitution: 0.5, friction: 0, label: 'wall' }
             );
 
-            const rightWall = Bodies.rectangle(
+            rightWall = Bodies.rectangle(
                 CANVAS_WIDTH + wallThickness / 2,
                 wallCenterY,
                 wallThickness,
@@ -567,8 +680,12 @@
             maxHeight = 0;
             trailPoints = [];
 
+            // Recalculate scale and canvas size at game start
+            resizeCanvas();
+
             createPunkCanvas();
             setupPhysics();
+            generateClouds();
             generatePowerUps();
 
             // Initialize camera to show the swing area
@@ -649,7 +766,7 @@
                         const dx = punk.position.x - powerUp.x;
                         const dy = punk.position.y - powerUp.y;
                         const distance = Math.sqrt(dx * dx + dy * dy);
-                        const collisionDist = (PUNK_SIZE + POWER_UP_SIZE) / 2;
+                        const collisionDist = (PUNK_SIZE + POWER_UP_SIZE_SCALED) / 2;
 
                         if (distance < collisionDist) {
                             // Collected!
@@ -666,7 +783,7 @@
                 }
 
                 // Check if punk has fallen back down past the ground
-                if (punk.velocity.y > 0 && punk.position.y > groundY + 200) {
+                if (punk.velocity.y > 0 && punk.position.y > groundY + 200 * SCALE) {
                     endGame();
                 }
             }
@@ -675,7 +792,7 @@
 
         // Render the game
         function render() {
-            const groundY = ANCHOR_Y + STRING_LENGTH + PUNK_SIZE + 50;
+            const groundY = ANCHOR_Y + STRING_LENGTH + PUNK_SIZE + 50 * SCALE;
 
             // Clear canvas with transparent so background punk shows through
             ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
@@ -697,7 +814,7 @@
             // Draw string
             if (!released) {
                 ctx.strokeStyle = '#fff';
-                ctx.lineWidth = 3;
+                ctx.lineWidth = 3 * SCALE;
                 ctx.beginPath();
                 ctx.moveTo(anchor.position.x, anchor.position.y);
                 ctx.lineTo(punk.position.x, punk.position.y);
@@ -706,14 +823,14 @@
                 // Draw anchor
                 ctx.fillStyle = '#fff';
                 ctx.beginPath();
-                ctx.arc(anchor.position.x, anchor.position.y, 8, 0, Math.PI * 2);
+                ctx.arc(anchor.position.x, anchor.position.y, 8 * SCALE, 0, Math.PI * 2);
                 ctx.fill();
             }
 
             // Draw trail when flying
             if (released && trailPoints.length > 1) {
                 ctx.strokeStyle = 'rgba(229, 99, 153, 0.5)';
-                ctx.lineWidth = 2;
+                ctx.lineWidth = 2 * SCALE;
                 ctx.beginPath();
                 ctx.moveTo(trailPoints[0].x, trailPoints[0].y);
                 for (let i = 1; i < trailPoints.length; i++) {
@@ -733,17 +850,17 @@
             const groundScreenY = groundY - cameraY;
             if (groundScreenY < CANVAS_HEIGHT + 200 && groundTileImage) {
                 ctx.imageSmoothingEnabled = false;
-                const tilesAcross = Math.ceil(CANVAS_WIDTH / GROUND_TILE_SIZE) + 1;
+                const tilesAcross = Math.ceil(CANVAS_WIDTH / GROUND_TILE_SIZE_SCALED) + 1;
 
                 // Draw 2 rows of ground tiles
                 for (let row = 0; row < 2; row++) {
                     for (let col = 0; col < tilesAcross; col++) {
                         ctx.drawImage(
                             groundTileImage,
-                            col * GROUND_TILE_SIZE,
-                            groundY + row * GROUND_TILE_SIZE,
-                            GROUND_TILE_SIZE,
-                            GROUND_TILE_SIZE
+                            col * GROUND_TILE_SIZE_SCALED,
+                            groundY + row * GROUND_TILE_SIZE_SCALED,
+                            GROUND_TILE_SIZE_SCALED,
+                            GROUND_TILE_SIZE_SCALED
                         );
                     }
                 }
@@ -755,16 +872,17 @@
             if (isHolding && !released) {
                 ctx.fillStyle = 'rgba(229, 99, 153, 0.3)';
                 ctx.beginPath();
-                ctx.arc(mousePos.x, mousePos.y, 30, 0, Math.PI * 2);
+                ctx.arc(mousePos.x, mousePos.y, 30 * SCALE, 0, Math.PI * 2);
                 ctx.fill();
             }
         }
 
         // Draw height markers on left side
         function drawHeightMarkers() {
-            const groundY = ANCHOR_Y + STRING_LENGTH + PUNK_SIZE + 50;
+            const groundY = ANCHOR_Y + STRING_LENGTH + PUNK_SIZE + 50 * SCALE;
 
-            ctx.font = '10px "Press Start 2P"';
+            const markerFontSize = Math.round(10 * SCALE);
+            ctx.font = `${markerFontSize}px "Press Start 2P"`;
             ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
             ctx.textAlign = 'left';
 
@@ -784,13 +902,13 @@
                     ctx.lineWidth = isMajor ? 2 : 1;
                     ctx.beginPath();
                     ctx.moveTo(0, y);
-                    ctx.lineTo(isMajor ? 60 : (isMinor ? 40 : 20), y);
+                    ctx.lineTo(isMajor ? 60 * SCALE : (isMinor ? 40 * SCALE : 20 * SCALE), y);
                     ctx.stroke();
 
                     // Label (every 50m)
                     if (isMinor && m > 0) {
                         ctx.fillStyle = isMajor ? '#E56399' : 'rgba(255, 255, 255, 0.5)';
-                        ctx.fillText(`${m}m`, 5, y - 5);
+                        ctx.fillText(`${m}m`, 5 * SCALE, y - 5 * SCALE);
                     }
                 }
             }
@@ -830,10 +948,10 @@
                     if (img && img.complete) {
                         ctx.drawImage(
                             img,
-                            powerUp.x - POWER_UP_SIZE / 2,
-                            powerUp.y - POWER_UP_SIZE / 2,
-                            POWER_UP_SIZE,
-                            POWER_UP_SIZE
+                            powerUp.x - POWER_UP_SIZE_SCALED / 2,
+                            powerUp.y - POWER_UP_SIZE_SCALED / 2,
+                            POWER_UP_SIZE_SCALED,
+                            POWER_UP_SIZE_SCALED
                         );
                     }
                 }
@@ -934,12 +1052,12 @@
 
                 // ALWAYS launch upward - use swing speed to determine power
                 // Minimum upward velocity plus bonus from swing speed
-                const minUpwardSpeed = 15;
+                const minUpwardSpeed = 15 * SCALE;
                 const speedBonus = speed * 1.2;
                 let boostY = -(minUpwardSpeed + speedBonus); // Negative = upward
 
                 // Clamp to prevent insane speeds
-                const maxSpeed = 35;
+                const maxSpeed = 35 * SCALE;
                 const newSpeed = Math.sqrt(boostX * boostX + boostY * boostY);
                 if (newSpeed > maxSpeed) {
                     const scale = maxSpeed / newSpeed;

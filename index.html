@@ -187,14 +187,17 @@
         // Matter.js modules
         const { Engine, Render, Runner, Bodies, Body, Composite, Constraint, Events, Mouse, Vector } = Matter;
 
-        // Play.fun SDK
-        const PLAYFUN_GAME_ID = '64ee7b61-3b07-437b-bcea-565ee94a0ddc';
+        // Play.fun SDK (OpenGameProtocol)
+        // The SDK reads the game's API key from <meta name="x-ogp-key"> automatically
         let playfunSDK = null;
 
         async function initPlayFun() {
             try {
-                playfunSDK = new PlayFunSDK({
-                    gameId: PLAYFUN_GAME_ID,
+                if (typeof OpenGameSDK === 'undefined') {
+                    console.warn('Play.fun SDK script not loaded');
+                    return;
+                }
+                playfunSDK = new OpenGameSDK({
                     ui: { usePointsWidget: true }
                 });
                 await playfunSDK.init();

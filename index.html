@@ -149,6 +149,11 @@
             transform: scale(0.95);
         }
 
+        .modal button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
         #punk-preview {
             width: 96px;
             height: 96px;
@@ -172,7 +177,7 @@
                 <canvas id="punk-preview"></canvas>
                 <p>SWING THE PUNK ON THE STRING AND FLING IT AS HIGH AS YOU CAN!</p>
                 <p>CLICK TO SWING<br>RELEASE TO LAUNCH!</p>
-                <button id="start-btn">START</button>
+                <button id="start-btn" disabled>LOADING...</button>
             </div>
 
             <div id="gameover-modal" class="modal hidden">
@@ -555,7 +560,7 @@
                 await loadPowerUps();
                 groundTileImage = new Image();
                 groundTileImage.src = 'assets/ground-tile.png';
-                await new Promise(resolve => { groundTileImage.onload = resolve; });
+                await new Promise(resolve => { groundTileImage.onload = resolve; groundTileImage.onerror = resolve; });
                 generateClouds();
 
                 const response = await fetch('assets/traits/manifest.json');
@@ -564,9 +569,15 @@
                 drawPunkPreview();
             } catch (e) {
                 console.error('Failed to load manifest:', e);
-                // Fallback: just use a colored circle
+                // Fallback: just use a colored square
                 manifest = { base: ['male1'], male: [], female: [] };
+                currentPunkData = { base: 'male1', traits: [], traitFolder: 'm', images: {} };
             }
+
+            // Enable start button now that punk data is ready
+            const startBtn = document.getElementById('start-btn');
+            startBtn.disabled = false;
+            startBtn.textContent = 'START';
         }
 
         // Generate a random punk

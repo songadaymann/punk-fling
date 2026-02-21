@@ -1059,7 +1059,7 @@
             // Award Play.fun points: 1 point per meter of max height
             if (playfunSDK && maxHeight > 0) {
                 playfunSDK.addPoints(maxHeight);
-                playfunSDK.savePoints().then(() => {
+                playfunSDK.endGame().then(() => {
                     console.log(`Play.fun: saved ${maxHeight} points`);
                 }).catch(e => {
                     console.warn('Play.fun: failed to save points:', e);

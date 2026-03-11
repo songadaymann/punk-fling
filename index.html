@@ -1042,7 +1042,7 @@
         }
 
         // End the game
-        function endGame() {
+        async function endGame() {
             gameOver = true;
             Composite.clear(engine.world);
 
@@ -1056,18 +1056,21 @@
                 newRecord.style.display = 'none';
             }
 
-            // Award Play.fun points: 1 point per meter of max height
-            if (playfunSDK && maxHeight > 0) {
-                playfunSDK.addPoints(maxHeight);
-                playfunSDK.endGame().then(() => {
-                    console.log(`Play.fun: saved ${maxHeight} points`);
-                }).catch(e => {
-                    console.warn('Play.fun: failed to save points:', e);
-                });
-            }
-
             finalScore.textContent = `${maxHeight}m`;
             gameoverModal.classList.remove('hidden');
+
+            // Award Play.fun points: 1 point per meter of max height
+            // addPoints is async (initializes flush state on first call),
+            // so we must await it before endGame flushes the buffer
+            if (playfunSDK && maxHeight > 0) {
+                try {
+                    await playfunSDK.addPoints(maxHeight);
+                    await playfunSDK.endGame();
+                    console.log(`Play.fun: saved ${maxHeight} points`);
+                } catch (e) {
+                    console.warn('Play.fun: failed to save points:', e);
+                }
+            }
         }
 
         // Restart the game
